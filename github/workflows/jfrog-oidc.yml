@@ -1,0 +1,67 @@
+name: JFrog OIDC Build Traceability
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  JFROG_CLI_BUILD_NAME: krypto-build
+  JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+
+jobs:
+  jfrog-build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JFrog CLI with OIDC
+        uses: jfrog/setup-jfrog-cli@v4
+        with:
+          oidc-provider-name: krypto-data-github-oidc
+          oidc-audience: krypto-data-github-oidc
+          disable-auto-build-publish: true
+        env:
+          JF_URL: https://trial2i0ycj.jfrog.io
+
+      - name: Verify JFrog connection
+        run: |
+          jf rt ping
+
+      - name: Create DLT manifest
+        run: |
+          cat > dlt-manifest.txt <<'EOF'
+          Project: KRIPTO-STREAM-DATA
+          Build: krypto-build
+          Source: GitHub Actions
+          Artifact: dlt-manifest.txt
+          EOF
+
+          echo "Created dlt-manifest.txt"
+          cat dlt-manifest.txt
+
+      - name: Upload DLT manifest
+        run: |
+          jf rt upload \
+            dlt-manifest.txt \
+            "krypto-data-npm-dev-local/" \
+            --project=KRIPTO-STREAM-DATA
+
+      - name: Collect environment variables
+        run: |
+          jf rt bce
+
+      - name: Collect Git metadata
+        run: |
+          jf rt bag
+
+      - name: Publish Build Info
+        run: |
+          jf rt bp
