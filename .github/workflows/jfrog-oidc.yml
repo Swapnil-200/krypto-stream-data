@@ -8,20 +8,41 @@ permissions:
   contents: read
 
 env:
+  # JFrog Build Info
   JFROG_CLI_BUILD_NAME: krypto-build
   JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+  JFROG_CLI_BUILD_PROJECT: KRIPTO-STREAM-DATA
+
+  # JFrog Project
+  JFROG_PROJECT: KRIPTO-STREAM-DATA
+
+  # JFrog URL
+  JF_URL: https://trial2i0ycj.jfrog.io
+
+  # Prevent sensitive environment variables from being
+  # collected into Build Info
+  JFROG_CLI_ENV_EXCLUDE: "*password*;*passwd*;*psw*;*secret*;*token*;*auth*;*credential*;*key*"
 
 jobs:
+
   jfrog-build:
+
     runs-on: ubuntu-latest
 
     steps:
 
+      # ============================================================
+      # 1. Checkout GitHub Repository
+      # ============================================================
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+
+      # ============================================================
+      # 2. Setup JFrog CLI with GitHub OIDC
+      # ============================================================
       - name: Setup JFrog CLI with OIDC
         uses: jfrog/setup-jfrog-cli@v4
         with:
@@ -29,12 +50,38 @@ jobs:
           oidc-audience: krypto-data-github-oidc
           disable-auto-build-publish: true
         env:
-          JF_URL: https://trial2i0ycj.jfrog.io
+          JF_URL: ${{ env.JF_URL }}
 
+
+      # ============================================================
+      # 3. Verify JFrog Connection
+      # ============================================================
       - name: Verify JFrog connection
         run: |
+          echo "Testing connection to JFrog Artifactory..."
           jf rt ping
 
+
+      # ============================================================
+      # 4. Display Build Information
+      # ============================================================
+      - name: Display build information
+        run: |
+          echo "=============================================="
+          echo "JFrog Build Information"
+          echo "=============================================="
+          echo "Build Name    : $JFROG_CLI_BUILD_NAME"
+          echo "Build Number  : $JFROG_CLI_BUILD_NUMBER"
+          echo "JFrog Project : $JFROG_CLI_BUILD_PROJECT"
+          echo "Git Repository: $GITHUB_REPOSITORY"
+          echo "Git Branch    : $GITHUB_REF_NAME"
+          echo "Git SHA       : $GITHUB_SHA"
+          echo "=============================================="
+
+
+      # ============================================================
+      # 5. Create DLT Manifest
+      # ============================================================
       - name: Create DLT manifest
         run: |
           cat > dlt-manifest.txt <<'EOF'
@@ -45,23 +92,67 @@ jobs:
           EOF
 
           echo "Created dlt-manifest.txt"
+          echo "----------------------------------------------"
           cat dlt-manifest.txt
+          echo "----------------------------------------------"
 
+
+      # ============================================================
+      # 6. Upload DLT Manifest to Artifactory
+      # ============================================================
       - name: Upload DLT manifest
         run: |
+          echo "Uploading dlt-manifest.txt to JFrog..."
+
           jf rt upload \
             dlt-manifest.txt \
             "krypto-data-npm-dev-loca/" \
-            --project=KRIPTO-STREAM-DATA
+            --build-name="$JFROG_CLI_BUILD_NAME" \
+            --build-number="$JFROG_CLI_BUILD_NUMBER"
 
-      - name: Collect environment variables
-        run: |
-          jf rt bce
+          echo "Artifact upload completed."
 
-      - name: Collect Git metadata
-        run: |
-          jf rt bag
 
+      # ============================================================
+      # 7. Publish Build Info
+      #
+      # IMPORTANT:
+      # --project=KRIPTO-STREAM-DATA explicitly associates
+      # the Build Info with the JFrog project.
+      #
+      # --collect-env collects environment information.
+      # --collect-git-info collects Git revision and repository URL.
+      # ============================================================
       - name: Publish Build Info
         run: |
-          jf rt bp
+          echo "Publishing Build Info..."
+          echo "Build Name    : $JFROG_CLI_BUILD_NAME"
+          echo "Build Number  : $JFROG_CLI_BUILD_NUMBER"
+          echo "JFrog Project : $JFROG_CLI_BUILD_PROJECT"
+
+          jf rt bp \
+            "$JFROG_CLI_BUILD_NAME" \
+            "$JFROG_CLI_BUILD_NUMBER" \
+            --project="$JFROG_CLI_BUILD_PROJECT" \
+            --collect-env \
+            --collect-git-info \
+            --build-url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+          echo "Build Info published successfully."
+
+
+      # ============================================================
+      # 8. Final Verification
+      # ============================================================
+      - name: Final verification
+        run: |
+          echo "=============================================="
+          echo "JFrog OIDC Build Traceability Completed"
+          echo "=============================================="
+          echo "JFrog Project : $JFROG_CLI_BUILD_PROJECT"
+          echo "Build Name    : $JFROG_CLI_BUILD_NAME"
+          echo "Build Number  : $JFROG_CLI_BUILD_NUMBER"
+          echo "Git Repository: $GITHUB_REPOSITORY"
+          echo "Git SHA       : $GITHUB_SHA"
+          echo "GitHub Run ID : $GITHUB_RUN_ID"
+          echo "=============================================="
