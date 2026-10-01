@@ -1,4 +1,4 @@
-name: JFrog OIDC Build Traceability
+name: JFrog OIDC Build Traceability #
 
 on:
   push: 
