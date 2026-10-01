@@ -51,7 +51,7 @@ jobs:
         run: |
           jf rt upload \
             dlt-manifest.txt \
-            "krypto-data-npm-dev-local/" \
+            "krypto-data-npm-dev-loca/" \
             --project=KRIPTO-STREAM-DATA
 
       - name: Collect environment variables
